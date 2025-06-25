@@ -107,6 +107,8 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
             ? p.image_urls.map((imgUrl: string) => {
                 try {
                     if (!imgUrl) return null;
+                    // If the URL is already absolute, new URL() will handle it correctly.
+                    // If it's relative, it will be resolved against the original page URL.
                     return new URL(imgUrl, originalUrl).href;
                 } catch (e) {
                     console.warn(`Could not create absolute URL for image: ${imgUrl} with base: ${originalUrl}`);
@@ -116,18 +118,21 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
             : [];
 
         // Step 2: Upload images to Firebase and get public URLs
-        const uploadedImageUrls: string[] = [];
+        const processedImageUrls: string[] = [];
         for (const imgUrl of absoluteImageUrls) {
             try {
                 const uploadedUrl = await uploadImageToFirebase(imgUrl, propertyId);
-                uploadedImageUrls.push(uploadedUrl);
+                processedImageUrls.push(uploadedUrl);
             } catch (err) {
-                console.error(`Failed to upload image ${imgUrl}, skipping. Error:`, err);
-                // Log error and continue to the next image
+                console.error(`[Image Upload] Failed to process image ${imgUrl}, using original as fallback. Error:`, err);
+                // On failure, use the original URL. The frontend component will try to render it
+                // and show its own error state if it also fails (e.g. CORS issue).
+                processedImageUrls.push(imgUrl);
             }
         }
 
-        const finalImageUrls = uploadedImageUrls.length > 0 ? uploadedImageUrls : ['https://placehold.co/600x400.png'];
+        // Use a placeholder only if no images were found or processed.
+        const finalImageUrls = processedImageUrls.length > 0 ? processedImageUrls : ['https://placehold.co/600x400.png'];
 
         console.log(`Final image URLs for property:`, finalImageUrls);
 
