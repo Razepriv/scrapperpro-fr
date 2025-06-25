@@ -10,13 +10,11 @@ interface PropertyImageProps {
   src: string;
   alt: string;
   className?: string;
-  width?: number;
-  height?: number;
 }
 
 const DEBUG = process.env.NODE_ENV === 'development';
 
-export function PropertyImage({ src, alt, className, width = 200, height = 150 }: PropertyImageProps) {
+export function PropertyImage({ src, alt, className }: PropertyImageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
@@ -42,8 +40,7 @@ export function PropertyImage({ src, alt, className, width = 200, height = 150 }
   if (hasError) {
     return (
       <div 
-        className={cn("flex-shrink-0 bg-muted rounded-md flex items-center justify-center border-2 border-dashed border-destructive/20", className)}
-        style={{ width: `${width}px`, height: `${height}px` }}
+        className={cn("bg-muted rounded-md flex items-center justify-center border-2 border-dashed border-destructive/20", className)}
       >
         <div className="text-center p-2 overflow-hidden">
           <AlertCircle className="h-6 w-6 text-destructive/80 mx-auto mb-1" />
@@ -56,8 +53,7 @@ export function PropertyImage({ src, alt, className, width = 200, height = 150 }
 
   return (
     <div 
-      className={cn("flex-shrink-0 relative bg-muted rounded-md overflow-hidden", className)}
-      style={{ width: `${width}px`, height: `${height}px` }}
+      className={cn("relative bg-muted rounded-md overflow-hidden", className)}
     >
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center" role="status" aria-live="polite" aria-busy="true">
@@ -67,10 +63,10 @@ export function PropertyImage({ src, alt, className, width = 200, height = 150 }
       <Image
         src={src}
         alt={alt}
-        width={width}
-        height={height}
+        fill
+        sizes="(max-width: 768px) 100vw, 50vw"
         className={cn(
-          "object-cover h-full w-full transition-opacity duration-300",
+          "object-cover transition-opacity duration-300",
           isLoading ? "opacity-0" : "opacity-100"
         )}
         onLoad={handleLoad}

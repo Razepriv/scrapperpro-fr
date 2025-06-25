@@ -19,55 +19,6 @@ const firebaseConfig = {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// --- Firebase Image Upload Logic ---
-async function uploadImageToFirebase(imageUrl: string, propertyId: string, index: number): Promise<string> {
-    // Dynamically import Firebase and UUID libraries only when this function is called.
-    const { initializeApp, getApp, getApps } = await import('firebase/app');
-    const { getStorage, ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-    
-    if (!firebaseConfig.apiKey || !firebaseConfig.storageBucket) {
-        throw new Error("Firebase configuration is missing. Please check your .env file.");
-    }
-    
-    // Download the image from the original source
-    console.log(`[Image Download] Attempting to fetch image from: ${imageUrl}`);
-    const response = await fetch(imageUrl, {
-        headers: {
-             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        }
-    });
-
-    if (!response.ok || !response.body) {
-        throw new Error(`Failed to fetch image from ${imageUrl}: ${response.statusText}`);
-    }
-
-    const imageBuffer = await response.arrayBuffer();
-    const imageSizeKB = Math.round(imageBuffer.byteLength / 1024);
-    console.log(`[Image Download] Downloaded ${imageSizeKB}KB image successfully from ${imageUrl}`);
-        
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
-    const fileExtension = contentType.split('/')[1] || 'jpg';
-    const fileName = `properties/${propertyId}/${propertyId}_${index}_${Date.now()}.${fileExtension}`;
-
-    // Initialize Firebase App (if not already initialized)
-    const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
-    const storage = getStorage(app);
-    const storageRef = ref(storage, fileName);
-
-    // Upload the image buffer to Firebase Storage
-    console.log(`[Image Upload] Uploading to Firebase Storage at path: ${fileName}`);
-    await uploadBytes(storageRef, imageBuffer, {
-        contentType: contentType
-    });
-
-    // Get the permanent public URL
-    const downloadURL = await getDownloadURL(storageRef);
-    
-    console.log(`[Image Upload] Successfully uploaded image to Firebase Storage: ${downloadURL}`);
-    return downloadURL;
-}
-
-
 async function getHtml(url: string): Promise<string> {
     try {
         const response = await fetch(url, {
@@ -94,6 +45,10 @@ async function getHtml(url: string): Promise<string> {
 async function processAndSaveHistory(properties: any[], originalUrl: string, historyEntry: Omit<HistoryEntry, 'id' | 'date' | 'propertyCount'>) {
     console.log(`AI extracted ${properties.length} properties. Processing content...`);
     
+    if (!firebaseConfig.apiKey || !firebaseConfig.storageBucket) {
+        throw new Error("Firebase configuration is missing. Please check your .env file.");
+    }
+    
     const processingPromises = properties.map(async (p, index) => {
         const propertyId = `prop-${Date.now()}-${index}`;
         
@@ -111,17 +66,55 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
             : [];
 
         // Step 2: Upload images to Firebase and get public URLs
-        const imageProcessingPromises = absoluteImageUrls.map((imgUrl, imgIndex) => 
-            uploadImageToFirebase(imgUrl, propertyId, imgIndex).catch(err => {
-                console.error(`[Image Processing] Failed to process image ${imgUrl}. Using original URL as fallback. Error:`, err);
-                return imgUrl; // Return original URL on failure
-            })
-        );
+        console.log(`[Image Processing] Starting for propertyId: ${propertyId}. Found ${absoluteImageUrls.length} candidate images.`);
+        const imageProcessingPromises = absoluteImageUrls.map(async (imgUrl, imgIndex) => {
+            try {
+                console.log(`[Image Download] [${imgIndex+1}/${absoluteImageUrls.length}] Attempting to fetch: ${imgUrl}`);
+                const response = await fetch(imgUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (compatible; PropScrapeAI/1.0)',
+                        'Referer': originalUrl,
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Fetch failed with status ${response.status}`);
+                }
+                
+                if (!response.body) {
+                    throw new Error(`Response body is empty for image: ${imgUrl}`);
+                }
+
+                const imageBuffer = await response.arrayBuffer();
+                const imageSizeKB = Math.round(imageBuffer.byteLength / 1024);
+                console.log(`[Image Download] [${imgIndex+1}] Success. Size: ${imageSizeKB}KB.`);
+                    
+                const contentType = response.headers.get('content-type') || 'image/jpeg';
+                const fileExtension = contentType.split('/')[1]?.split('+')[0] || 'jpg';
+                const fileName = `properties/${propertyId}/${Date.now()}_${imgIndex}.${fileExtension}`;
+
+                const { initializeApp, getApp, getApps } = await import('firebase/app');
+                const { getStorage, ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+                const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+                const storage = getStorage(app);
+                const storageRef = ref(storage, fileName);
+
+                console.log(`[Image Upload] [${imgIndex+1}] Uploading to Firebase Storage at path: ${fileName}`);
+                await uploadBytes(storageRef, imageBuffer, { contentType });
+                const downloadURL = await getDownloadURL(storageRef);
+                console.log(`[Image Upload] [${imgIndex+1}] Success. URL: ${downloadURL}`);
+                return downloadURL;
+
+            } catch (err: any) {
+                console.error(`[Image Processing] [${imgIndex+1}] Failed to process image ${imgUrl}. Error:`, err.message);
+                return imgUrl; // Keep original URL as fallback
+            }
+        });
+        
         const processedImageUrls = await Promise.all(imageProcessingPromises);
 
         // Use a placeholder only if no images were found or processed.
         const finalImageUrls = processedImageUrls.length > 0 ? processedImageUrls : ['https://placehold.co/600x400.png'];
-        console.log(`Final image URLs for property:`, finalImageUrls);
 
         // Step 3: Enhance text content
         const enhancedContent = (p.title && p.description) 

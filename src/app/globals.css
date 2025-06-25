@@ -70,3 +70,81 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Add to your existing styles */
+.property-gallery {
+  width: 100%;
+  max-width: 600px;
+  margin: 20px auto;
+}
+
+.main-image {
+  position: relative;
+  width: 100%;
+  height: 400px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: hsl(var(--muted));
+}
+
+.main-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.image-counter {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0,0,0,0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 15px;
+  font-size: 12px;
+}
+
+.thumbnail-strip {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  overflow-x: auto;
+  padding: 5px 0;
+}
+
+.thumbnail {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.thumbnail.active {
+  opacity: 1;
+  border-color: hsl(var(--primary));
+}
+
+.no-images {
+  text-align: center;
+  padding: 40px;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted));
+  border-radius: 12px;
+}
+
+.placeholder-icon {
+  font-size: 48px;
+  margin-bottom: 10px;
+  color: hsl(var(--muted-foreground));
+}
+
+.loading-spinner {
+  text-align: center;
+  padding: 40px;
+  color: hsl(var(--muted-foreground));
+}
