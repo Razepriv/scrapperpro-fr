@@ -57,9 +57,11 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
             ? p.image_urls.map((imgUrl: string) => {
                 try {
                     if (!imgUrl) return null;
-                    return new URL(imgUrl, originalUrl).href;
+                    // Use page_link as a more reliable base if originalUrl is just a placeholder
+                    const baseUrl = originalUrl.startsWith('http') ? originalUrl : (p.page_link || 'https://example.com');
+                    return new URL(imgUrl, baseUrl).href;
                 } catch (e) {
-                    console.warn(`Could not create absolute URL for image: ${imgUrl} with base: ${originalUrl}`);
+                    console.warn(`Could not create absolute URL for image: ${imgUrl}`);
                     return null;
                 }
             }).filter((url: string | null): url is string => url !== null)
@@ -70,10 +72,11 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
         const imageProcessingPromises = absoluteImageUrls.map(async (imgUrl, imgIndex) => {
             try {
                 console.log(`[Image Download] [${imgIndex+1}/${absoluteImageUrls.length}] Attempting to fetch: ${imgUrl}`);
+                const referer = originalUrl.startsWith('http') ? originalUrl : (p.page_link || 'https://example.com');
                 const response = await fetch(imgUrl, {
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (compatible; PropScrapeAI/1.0)',
-                        'Referer': originalUrl,
+                        'Referer': referer,
                     },
                 });
 
@@ -107,11 +110,11 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
 
             } catch (err: any) {
                 console.error(`[Image Processing] [${imgIndex+1}] Failed to process image ${imgUrl}. Error:`, err.message);
-                return imgUrl; // Keep original URL as fallback
+                return null; // Return null on failure
             }
         });
         
-        const processedImageUrls = await Promise.all(imageProcessingPromises);
+        const processedImageUrls = (await Promise.all(imageProcessingPromises)).filter((url): url is string => !!url);
 
         // Use a placeholder only if no images were found or processed.
         const finalImageUrls = processedImageUrls.length > 0 ? processedImageUrls : ['https://placehold.co/600x400.png'];

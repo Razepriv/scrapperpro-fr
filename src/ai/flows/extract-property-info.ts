@@ -69,11 +69,19 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert at extracting structured data from web pages. Analyze the following HTML content from a real estate website and extract the details for all properties listed on the page.
 
 Your goal is to populate all fields in the provided JSON schema.
+
+**CRITICAL INSTRUCTIONS FOR IMAGE EXTRACTION:**
+- Find all relevant, high-quality image URLs for the property.
+- Look for images in various places:
+  - Standard \`<img>\` tags. Check the \`src\` attribute.
+  - Lazy-loaded images. Check for \`data-src\`, \`data-original\`, or similar attributes.
+  - Responsive images inside \`<picture>\` tags. Look for \`<source>\` elements and their \`srcset\` attributes.
+  - Images set as CSS backgrounds. Look for \`style="background-image: url(...)"\`.
 - For all string fields, if you cannot find the information, return an empty string "".
 - For all number fields, if you cannot find the information, return 0.
 - For all array fields (like 'features'), if no information is found, return an empty array [].
-- For 'image_urls', find all relevant, high-quality image URLs. If no image URLs are found, return an empty array [].
-- Ensure all extracted image URLs are absolute (i.e., they start with http or https). If you find relative URLs, do your best to resolve them into absolute URLs.
+- For 'image_urls', if you cannot find ANY images after trying all the methods above, return an empty array []. DO NOT return placeholder URLs.
+- Ensure all extracted image URLs are absolute (i.e., they start with http or https). If you find relative URLs, do your best to resolve them into absolute URLs based on the likely domain.
 - Extract contact details like phone numbers and emails for the listed person or agency.
 
 HTML Content:
