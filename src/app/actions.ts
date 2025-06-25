@@ -6,39 +6,14 @@ import { extractPropertyInfo } from '@/ai/flows/extract-property-info';
 import { savePropertiesToDb, saveHistoryEntry, updatePropertyInDb, deletePropertyFromDb } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { type Property, type HistoryEntry } from '@/lib/types';
-import type { FirebaseApp } from 'firebase/app';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 
 
-// Function to download an image from a URL, and upload it to Firebase Storage
-async function uploadImageAndGetUrl(imageUrl: string, propertyId: string): Promise<string | null> {
-    const firebaseConfig = {
-        apiKey: process.env.FIREBASE_API_KEY,
-        authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.FIREBASE_APP_ID,
-    };
-
-    const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
-
-    if (!isFirebaseConfigured) {
-        throw new Error("Firebase configuration is incomplete. Cannot upload images. Please check your .env file.");
-    }
-    
+// Function to download an image from a URL and save it to the local public directory
+async function downloadAndSaveImage(imageUrl: string, propertyId: string): Promise<string | null> {
     try {
-        const { initializeApp, getApp, getApps } = await import('firebase/app');
-        const { getStorage, ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-        const { v4: uuidv4 } = await import('uuid');
-
-        // Initialize Firebase lazily
-        const getFirebaseApp = (): FirebaseApp => {
-            return getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-        };
-
-        const app = getFirebaseApp();
-        const storage = getStorage(app);
-
         console.log(`Downloading image from: ${imageUrl}`);
         const response = await fetch(imageUrl, {
             headers: {
@@ -51,20 +26,23 @@ async function uploadImageAndGetUrl(imageUrl: string, propertyId: string): Promi
         const imageBuffer = await response.arrayBuffer();
         
         const fileExtension = imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
-        const contentType = `image/${fileExtension}`;
         const fileName = `${propertyId}-${uuidv4()}.${fileExtension}`;
-        const storageRef = ref(storage, `property-images/${fileName}`);
         
-        console.log(`Uploading image to Firebase Storage as: ${fileName}`);
-        await uploadBytes(storageRef, imageBuffer, { contentType });
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'properties');
+        await fs.mkdir(uploadDir, { recursive: true });
         
-        const downloadUrl = await getDownloadURL(storageRef);
-        console.log(`Successfully uploaded. Public URL: ${downloadUrl}`);
+        const filePath = path.join(uploadDir, fileName);
         
-        return downloadUrl;
+        console.log(`Saving image to: ${filePath}`);
+        await fs.writeFile(filePath, Buffer.from(imageBuffer));
+        
+        const publicUrl = `/uploads/properties/${fileName}`;
+        console.log(`Successfully saved. Public URL: ${publicUrl}`);
+        
+        return publicUrl;
     } catch (error) {
         console.error(`Error processing image from ${imageUrl}:`, error);
-        // Return null instead of throwing to allow graceful fallback
+        // Return null to allow graceful fallback to the original URL if download fails.
         return null;
     }
 }
@@ -97,43 +75,45 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
     console.log(`AI extracted ${properties.length} properties. Processing content...`);
     
     const processingPromises = properties.map(async (p, index) => {
-        // Step 0: Ensure all image URLs are absolute
+        const propertyId = `prop-${Date.now()}-${index}`;
+        
+        // Step 1: Ensure all image URLs are absolute
         const absoluteImageUrls = (p.image_urls && Array.isArray(p.image_urls))
             ? p.image_urls.map((imgUrl: string) => {
                 try {
                     // If imgUrl is already absolute, this works. If it's relative, it's resolved against originalUrl.
                     return new URL(imgUrl, originalUrl).href;
                 } catch (e) {
-                    // If either URL is invalid, it might throw. We'll ignore this image.
                     console.warn(`Could not create absolute URL for image: ${imgUrl} with base: ${originalUrl}`);
                     return null;
                 }
             }).filter((url: string | null): url is string => url !== null)
             : [];
 
-        // Step 1: Download images, upload to Firebase Storage, and get public URLs
-        const uploadedImageUrls = await Promise.all(
+        // Step 2: Download images and get local public URLs
+        const downloadedImageUrls = await Promise.all(
             absoluteImageUrls.map((imgUrl: string) => 
-                uploadImageAndGetUrl(imgUrl, `prop-${Date.now()}-${index}`)
+                downloadAndSaveImage(imgUrl, propertyId)
             )
         );
 
-        const finalImageUrls = uploadedImageUrls.filter((url): url is string => url !== null); // Filter out any nulls from failed uploads
+        // Use downloaded URLs, but fallback to original absolute URLs if download failed
+        const finalImageUrls = downloadedImageUrls.map((localUrl, i) => localUrl ?? absoluteImageUrls[i]);
         if (finalImageUrls.length === 0) {
             finalImageUrls.push('https://placehold.co/600x400.png');
         }
 
-        console.log(`Processed and uploaded image URLs:`, finalImageUrls);
+        console.log(`Final image URLs for property:`, finalImageUrls);
 
-        // Step 2: Enhance text content
+        // Step 3: Enhance text content
         const enhancedContent = (p.title && p.description) 
             ? await enhancePropertyContent({ title: p.title, description: p.description })
             : { enhancedTitle: p.title, enhancedDescription: p.description };
         
-        // Step 3: Assemble final property object
+        // Step 4: Assemble final property object
         return {
             ...p,
-            id: `prop-${Date.now()}-${index}`,
+            id: propertyId,
             original_url: originalUrl,
             original_title: p.title,
             original_description: p.description,
