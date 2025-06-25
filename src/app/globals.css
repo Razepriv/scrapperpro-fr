@@ -113,20 +113,23 @@ body {
   padding: 5px 0;
 }
 
-.thumbnail {
-  width: 60px;
-  height: 60px;
-  object-fit: cover;
-  border-radius: 6px;
-  cursor: pointer;
-  opacity: 0.7;
-  transition: all 0.2s ease;
+.thumbnail .property-image-container {
   border: 2px solid transparent;
+  transition: border-color 0.2s ease;
 }
 
-.thumbnail.active {
-  opacity: 1;
-  border-color: hsl(var(--primary));
+.thumbnail.active .property-image-container {
+   border-color: hsl(var(--primary));
+}
+
+.thumbnail .property-image-container {
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.thumbnail.active .property-image-container,
+.thumbnail:hover .property-image-container {
+    opacity: 1;
 }
 
 .no-images {

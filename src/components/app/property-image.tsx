@@ -40,12 +40,13 @@ export function PropertyImage({ src, alt, className }: PropertyImageProps) {
   if (hasError) {
     return (
       <div 
-        className={cn("bg-muted rounded-md flex items-center justify-center border-2 border-dashed border-destructive/20", className)}
+        className={cn("bg-destructive/10 rounded-md flex items-center justify-center border-2 border-dashed border-destructive/20 text-destructive", className)}
+        title={`Failed to load image from: ${src}`}
       >
         <div className="text-center p-2 overflow-hidden">
-          <AlertCircle className="h-6 w-6 text-destructive/80 mx-auto mb-1" />
-          <p className="text-xs text-destructive">Failed to load</p>
-          <p className="text-[10px] text-muted-foreground/70 break-all mt-1 truncate" title={src}>{src}</p>
+          <AlertCircle className="h-6 w-6 mx-auto mb-1" />
+          <p className="text-xs font-semibold">Image Error</p>
+          <p className="text-[10px] text-destructive/70 break-all mt-1 truncate">{src}</p>
         </div>
       </div>
     );
@@ -58,6 +59,7 @@ export function PropertyImage({ src, alt, className }: PropertyImageProps) {
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center" role="status" aria-live="polite" aria-busy="true">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+           <span className="sr-only">Loading image...</span>
         </div>
       )}
       <Image

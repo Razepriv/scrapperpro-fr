@@ -57,7 +57,6 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
             ? p.image_urls.map((imgUrl: string) => {
                 try {
                     if (!imgUrl) return null;
-                    // Use page_link as a more reliable base if originalUrl is just a placeholder
                     const baseUrl = originalUrl.startsWith('http') ? originalUrl : (p.page_link || 'https://example.com');
                     return new URL(imgUrl, baseUrl).href;
                 } catch (e) {
@@ -71,7 +70,7 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
         console.log(`[Image Processing] Starting for propertyId: ${propertyId}. Found ${absoluteImageUrls.length} candidate images.`);
         const imageProcessingPromises = absoluteImageUrls.map(async (imgUrl, imgIndex) => {
             try {
-                console.log(`[Image Download] [${imgIndex+1}/${absoluteImageUrls.length}] Attempting to fetch: ${imgUrl}`);
+                console.log(`[Image Processing] [${imgIndex+1}/${absoluteImageUrls.length}] Attempting to fetch: ${imgUrl}`);
                 const referer = originalUrl.startsWith('http') ? originalUrl : (p.page_link || 'https://example.com');
                 const response = await fetch(imgUrl, {
                     headers: {
@@ -84,15 +83,18 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
                     throw new Error(`Fetch failed with status ${response.status}`);
                 }
                 
-                if (!response.body) {
-                    throw new Error(`Response body is empty for image: ${imgUrl}`);
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.startsWith('image/')) {
+                    throw new Error(`Invalid content-type: ${contentType}. Expected an image.`);
                 }
 
                 const imageBuffer = await response.arrayBuffer();
+                 if (imageBuffer.byteLength === 0) {
+                    throw new Error('Downloaded image buffer is empty.');
+                }
                 const imageSizeKB = Math.round(imageBuffer.byteLength / 1024);
-                console.log(`[Image Download] [${imgIndex+1}] Success. Size: ${imageSizeKB}KB.`);
+                console.log(`[Image Download] [${imgIndex+1}] Success. Size: ${imageSizeKB}KB. Content-Type: ${contentType}`);
                     
-                const contentType = response.headers.get('content-type') || 'image/jpeg';
                 const fileExtension = contentType.split('/')[1]?.split('+')[0] || 'jpg';
                 const fileName = `properties/${propertyId}/${Date.now()}_${imgIndex}.${fileExtension}`;
 
@@ -110,13 +112,14 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
 
             } catch (err: any) {
                 console.error(`[Image Processing] [${imgIndex+1}] Failed to process image ${imgUrl}. Error:`, err.message);
-                return null; // Return null on failure
+                // Return the original URL on failure so the frontend can try to render it and show an error.
+                return imgUrl;
             }
         });
         
         const processedImageUrls = (await Promise.all(imageProcessingPromises)).filter((url): url is string => !!url);
 
-        // Use a placeholder only if no images were found or processed.
+        // Use a placeholder only if no images were found or processed successfully.
         const finalImageUrls = processedImageUrls.length > 0 ? processedImageUrls : ['https://placehold.co/600x400.png'];
 
         // Step 3: Enhance text content
@@ -145,7 +148,6 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
     
     console.log('Content processing complete.');
     
-    // We save to our database before returning, so the data is available immediately
     await savePropertiesToDb(finalProperties);
     
     await saveHistoryEntry({
@@ -202,7 +204,6 @@ export async function scrapeBulk(urls: string): Promise<Property[] | null> {
     }
     
     const allResults: Property[] = [];
-    // Process URLs sequentially to be gentle on target servers
     for (const url of urlList) {
         try {
             console.log(`Scraping ${url} in bulk...`);
@@ -221,9 +222,8 @@ export async function scrapeBulk(urls: string): Promise<Property[] | null> {
 }
 
 
-// NEW ACTIONS FOR DATABASE MANAGEMENT
 export async function saveProperty(property: Property) {
-    await savePropertiesToDb([property]); // savePropertiesToDb accepts an array
+    await savePropertiesToDb([property]);
     revalidatePath('/database');
 }
 
