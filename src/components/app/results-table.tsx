@@ -6,10 +6,11 @@ import { BedDouble, Bath, Square, MapPin, Building, Globe, CheckCircle, FileText
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { type Property } from '@/app/actions';
+import { type Property } from '@/lib/types';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { EnhanceDialog } from './enhance-dialog';
+import { PropertyImage } from './property-image';
 
 interface ResultsTableProps {
   properties: Property[];
@@ -73,13 +74,12 @@ export function ResultsTable({ properties, onSave }: ResultsTableProps) {
           <AccordionTrigger className="p-4 hover:no-underline [&[data-state=open]>div>svg]:rotate-180">
              <div className="flex items-center justify-between gap-4 w-full text-left">
                 <div className="flex items-center gap-4 flex-1 min-w-0">
-                    <Image
+                    <PropertyImage
                       src={prop.image_url || 'https://placehold.co/600x400.png'}
                       alt={prop.title}
                       width={120}
                       height={80}
-                      className="rounded-md object-cover hidden sm:block"
-                      data-ai-hint="property house"
+                      className="hidden sm:block"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="font-bold truncate text-base" title={prop.title}>{prop.title}</p>
@@ -124,16 +124,11 @@ export function ResultsTable({ properties, onSave }: ResultsTableProps) {
                     <h4 className="font-semibold text-base mb-3 flex items-center gap-2"><Images className="h-4 w-4"/> Image Gallery</h4>
                     <div className="flex overflow-x-auto space-x-4 pb-2 -mx-4 px-4">
                       {prop.image_urls.map((url, index) => (
-                        <div key={index} className="flex-shrink-0">
-                          <Image
+                        <PropertyImage
+                            key={index}
                             src={url || 'https://placehold.co/600x400.png'}
                             alt={`${prop.title} image ${index + 1}`}
-                            width={200}
-                            height={150}
-                            className="rounded-md object-cover h-[150px]"
-                            data-ai-hint="property house"
-                          />
-                        </div>
+                        />
                       ))}
                     </div>
                   </div>

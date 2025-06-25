@@ -1,12 +1,10 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /property-images/{imageId} {
-      allow read: if true; 
-      allow write: if true;
-    }
-    match /{allPaths=**} {
-      allow read, write: if false;
+    // Allow public read/write for property-images
+    match /property-images/{allPaths=**} {
+      allow read: if true;
+      allow write: if true; // This allows server-side uploads. For client-side, restrict with `if request.auth != null;`
     }
   }
 }

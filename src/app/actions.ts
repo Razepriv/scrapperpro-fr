@@ -34,6 +34,7 @@ async function uploadImageToFirebase(imageUrl: string, propertyId: string): Prom
     }
     
     // Download the image from the original source
+    console.log(`[Image Download] Attempting to fetch image from: ${imageUrl}`);
     const response = await fetch(imageUrl, {
         headers: {
              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -41,12 +42,17 @@ async function uploadImageToFirebase(imageUrl: string, propertyId: string): Prom
     });
 
     if (!response.ok) {
+        console.error(`[Image Download] Failed to fetch image from ${imageUrl}: ${response.statusText}`);
         throw new Error(`Failed to fetch image from ${imageUrl}: ${response.statusText}`);
     }
 
     const imageBuffer = await response.arrayBuffer();
-    const fileExtension = imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
-    const fileName = `properties/${propertyId}/${uuidv4()}.${fileExtension}`;
+    const imageSizeKB = Math.round(imageBuffer.byteLength / 1024);
+    console.log(`[Image Download] Downloaded ${imageSizeKB}KB image successfully from ${imageUrl}`);
+        
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const fileExtension = contentType.split('/')[1] || 'jpg';
+    const fileName = `property-images/${propertyId}/${uuidv4()}.${fileExtension}`;
 
     // Initialize Firebase App (if not already initialized)
     const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
@@ -54,14 +60,15 @@ async function uploadImageToFirebase(imageUrl: string, propertyId: string): Prom
     const storageRef = ref(storage, fileName);
 
     // Upload the image buffer to Firebase Storage
+    console.log(`[Image Upload] Uploading to Firebase Storage at path: ${fileName}`);
     await uploadBytes(storageRef, imageBuffer, {
-        contentType: `image/${fileExtension}`
+        contentType: contentType
     });
 
     // Get the permanent public URL
     const downloadURL = await getDownloadURL(storageRef);
     
-    console.log(`Successfully uploaded image to Firebase Storage: ${downloadURL}`);
+    console.log(`[Image Upload] Successfully uploaded image to Firebase Storage: ${downloadURL}`);
     return downloadURL;
 }
 
@@ -115,7 +122,7 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
                 const uploadedUrl = await uploadImageToFirebase(imgUrl, propertyId);
                 uploadedImageUrls.push(uploadedUrl);
             } catch (err) {
-                console.error(`Failed to upload image ${imgUrl}:`, err);
+                console.error(`Failed to upload image ${imgUrl}, skipping. Error:`, err);
                 // Log error and continue to the next image
             }
         }
