@@ -28,7 +28,6 @@ interface DatabaseTableProps {
   properties: Property[];
   onEdit: (property: Property) => void;
   onDelete: (propertyId: string) => void;
-  onEnhance: (property: Property) => void;
 }
 
 interface DetailItemProps {
@@ -68,7 +67,7 @@ const DetailItem: React.FC<DetailItemProps> = ({ icon: Icon, label, value }) => 
 };
 
 
-export function DatabaseTable({ properties, onEdit, onDelete, onEnhance }: DatabaseTableProps) {
+export function DatabaseTable({ properties, onEdit, onDelete }: DatabaseTableProps) {
   const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(null);
 
   if (properties.length === 0) {
@@ -119,9 +118,6 @@ export function DatabaseTable({ properties, onEdit, onDelete, onEnhance }: Datab
                           <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                               <DropdownMenuItem onSelect={() => onEdit(prop)}>
                                   <Edit className="mr-2 h-4 w-4" /> Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => onEnhance(prop)}>
-                                  <Sparkles className="mr-2 h-4 w-4" /> Re-Enhance
                               </DropdownMenuItem>
                               {prop.original_url && prop.original_url.startsWith('http') && (
                                   <DropdownMenuItem onSelect={() => window.open(prop.original_url, '_blank')}>

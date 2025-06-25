@@ -46,7 +46,7 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
     console.log(`AI extracted ${properties.length} properties. Processing content...`);
     
     if (!firebaseConfig.apiKey || !firebaseConfig.storageBucket) {
-        throw new Error("Firebase configuration is missing. Please check your .env file.");
+        console.error("Firebase configuration is missing. Image uploads will fail.");
     }
     
     const processingPromises = properties.map(async (p, index) => {
@@ -235,29 +235,4 @@ export async function updateProperty(property: Property) {
 export async function deleteProperty(propertyId: string) {
     await deletePropertyFromDb(propertyId);
     revalidatePath('/database');
-}
-
-export async function reEnhanceProperty(property: Property): Promise<Property | null> {
-    try {
-        const enhancedContent = await enhancePropertyContent({ 
-            title: property.original_title, 
-            description: property.original_description 
-        });
-
-        const updatedProperty = {
-            ...property,
-            title: enhancedContent.enhancedTitle,
-            description: enhancedContent.enhancedDescription,
-            enhanced_title: enhancedContent.enhancedTitle,
-            enhanced_description: enhancedContent.enhancedDescription,
-        };
-        
-        await updatePropertyInDb(updatedProperty);
-        revalidatePath('/database');
-        
-        return updatedProperty;
-    } catch(error) {
-        console.error("Failed to re-enhance property:", error);
-        return null;
-    }
 }

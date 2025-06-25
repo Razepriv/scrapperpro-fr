@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { type Property } from '@/lib/types';
-import { deleteProperty, updateProperty, reEnhanceProperty } from '@/app/actions';
+import { deleteProperty, updateProperty } from '@/app/actions';
 import { DatabaseTable } from '@/components/app/database-table';
 import { EditDialog } from '@/components/app/edit-dialog';
 import { useToast } from "@/hooks/use-toast";
@@ -37,22 +37,6 @@ export function DatabasePage({ initialProperties }: DatabasePageProps) {
     setSelectedProperty(property);
     setIsEditDialogOpen(true);
   };
-  
-  const handleEnhance = (property: Property) => {
-    startTransition(async () => {
-        try {
-            const enhancedProperty = await reEnhanceProperty(property);
-            if(enhancedProperty) {
-                 handleSave(enhancedProperty);
-                 toast({ title: "Success", description: "Property content enhanced and updated." });
-            } else {
-                 toast({ variant: "destructive", title: "Error", description: "Failed to enhance property." });
-            }
-        } catch (error) {
-            toast({ variant: "destructive", title: "Error", description: "Failed to enhance property." });
-        }
-    })
-  }
 
   const handleSave = (updatedProperty: Property) => {
     startTransition(async () => {
@@ -76,7 +60,7 @@ export function DatabasePage({ initialProperties }: DatabasePageProps) {
         <Button variant="outline" onClick={() => downloadExcel(properties, 'database_export')}>Export Excel</Button>
       </div>
       {isPending && <div className="flex justify-center items-center my-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}
-      <DatabaseTable properties={properties} onDelete={handleDelete} onEdit={handleEdit} onEnhance={handleEnhance} />
+      <DatabaseTable properties={properties} onDelete={handleDelete} onEdit={handleEdit} />
       <EditDialog
         isOpen={isEditDialogOpen}
         property={selectedProperty}
