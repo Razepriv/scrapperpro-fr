@@ -42,7 +42,7 @@ async function getHtml(url: string): Promise<string> {
     }
 }
 
-async function processAndSaveHistory(properties: any[], originalUrl: string, historyEntry: Omit<HistoryEntry, 'id' | 'date' | 'propertyCount'>) {
+async function processScrapedData(properties: any[], originalUrl: string, historyEntry: Omit<HistoryEntry, 'id' | 'date' | 'propertyCount'>) {
     console.log(`AI extracted ${properties.length} properties. Processing content...`);
     
     if (!firebaseConfig.apiKey || !firebaseConfig.storageBucket) {
@@ -148,15 +148,12 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
     
     console.log('Content processing complete.');
     
-    await savePropertiesToDb(finalProperties);
-    
     await saveHistoryEntry({
         ...historyEntry,
         propertyCount: finalProperties.length,
     });
 
     revalidatePath('/history');
-    revalidatePath('/database');
 
     return finalProperties;
 }
@@ -176,7 +173,7 @@ export async function scrapeUrl(url: string): Promise<Property[] | null> {
         return [];
     }
     
-    return processAndSaveHistory(result.properties, url, { type: 'URL', details: url });
+    return processScrapedData(result.properties, url, { type: 'URL', details: url });
 }
 
 export async function scrapeHtml(html: string, originalUrl: string = 'scraped-from-html'): Promise<Property[] | null> {
@@ -192,7 +189,7 @@ export async function scrapeHtml(html: string, originalUrl: string = 'scraped-fr
         return [];
     }
     
-    return processAndSaveHistory(result.properties, originalUrl, { type: 'HTML', details: 'Pasted HTML content' });
+    return processScrapedData(result.properties, originalUrl, { type: 'HTML', details: 'Pasted HTML content' });
 }
 
 export async function scrapeBulk(urls: string): Promise<Property[] | null> {
@@ -210,7 +207,7 @@ export async function scrapeBulk(urls: string): Promise<Property[] | null> {
             const htmlContent = await getHtml(url);
             const result = await extractPropertyInfo({ htmlContent });
             if (result && result.properties) {
-                const processed = await processAndSaveHistory(result.properties, url, {type: 'BULK', details: `Bulk operation included: ${url}`});
+                const processed = await processScrapedData(result.properties, url, {type: 'BULK', details: `Bulk operation included: ${url}`});
                 allResults.push(...processed);
             }
         } catch (error) {
