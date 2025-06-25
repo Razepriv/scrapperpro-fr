@@ -1,9 +1,16 @@
+// Updated rules (allowing property image access)
 rules_version = '2';
-
 service firebase.storage {
   match /b/{bucket}/o {
+    // Allow public read access to property images
+    match /property-images/{imageId} {
+      allow read: if true;  // ✅ Public read access
+      allow write: if true; // ✅ Server-side uploads
+    }
+
+    // Block all other access
     match /{allPaths=**} {
       allow read, write: if false;
-    }
-  }
+    }
+  }
 }

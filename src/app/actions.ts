@@ -1,50 +1,68 @@
 
 "use server";
 
+import type { FirebaseApp } from 'firebase/app';
 import { enhancePropertyContent } from '@/ai/flows/enhance-property-description';
 import { extractPropertyInfo } from '@/ai/flows/extract-property-info';
 import { savePropertiesToDb, saveHistoryEntry, updatePropertyInDb, deletePropertyFromDb } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { type Property, type HistoryEntry } from '@/lib/types';
-import { promises as fs } from 'fs';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 
+// --- Firebase Configuration ---
+// These credentials should be stored in your .env.local file
+const firebaseConfig = {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
 
-// Function to download an image from a URL and save it to the local public directory
-async function downloadAndSaveImage(imageUrl: string, propertyId: string): Promise<string | null> {
-    try {
-        console.log(`Downloading image from: ${imageUrl}`);
-        const response = await fetch(imageUrl, {
-            headers: {
-                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            }
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch image: ${response.statusText}`);
-        }
-        const imageBuffer = await response.arrayBuffer();
-        
-        const fileExtension = imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
-        const fileName = `${propertyId}-${uuidv4()}.${fileExtension}`;
-        
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'properties');
-        await fs.mkdir(uploadDir, { recursive: true });
-        
-        const filePath = path.join(uploadDir, fileName);
-        
-        console.log(`Saving image to: ${filePath}`);
-        await fs.writeFile(filePath, Buffer.from(imageBuffer));
-        
-        const publicUrl = `/uploads/properties/${fileName}`;
-        console.log(`Successfully saved. Public URL: ${publicUrl}`);
-        
-        return publicUrl;
-    } catch (error) {
-        console.error(`Error processing image from ${imageUrl}:`, error);
-        // Return null to allow graceful fallback to the original URL if download fails.
-        return null;
+// --- Firebase Image Upload Logic ---
+async function uploadImageToFirebase(imageUrl: string, propertyId: string): Promise<string> {
+    // Dynamically import Firebase and UUID libraries only when this function is called.
+    // This is crucial for avoiding build errors in Next.js.
+    const { initializeApp, getApp, getApps } = await import('firebase/app');
+    const { getStorage, ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+    const { v4: uuidv4 } = await import('uuid');
+
+    // Fail-fast if Firebase is not configured.
+    if (!firebaseConfig.apiKey || !firebaseConfig.storageBucket) {
+        throw new Error("Firebase configuration is missing. Please check your .env file.");
     }
+    
+    // Download the image from the original source
+    const response = await fetch(imageUrl, {
+        headers: {
+             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch image from ${imageUrl}: ${response.statusText}`);
+    }
+
+    const imageBuffer = await response.arrayBuffer();
+    const fileExtension = imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
+    const fileName = `properties/${propertyId}/${uuidv4()}.${fileExtension}`;
+
+    // Initialize Firebase App (if not already initialized)
+    const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    const storage = getStorage(app);
+    const storageRef = ref(storage, fileName);
+
+    // Upload the image buffer to Firebase Storage
+    await uploadBytes(storageRef, imageBuffer, {
+        contentType: `image/${fileExtension}`
+    });
+
+    // Get the permanent public URL
+    const downloadURL = await getDownloadURL(storageRef);
+    
+    console.log(`Successfully uploaded image to Firebase Storage: ${downloadURL}`);
+    return downloadURL;
 }
 
 
@@ -81,7 +99,7 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
         const absoluteImageUrls = (p.image_urls && Array.isArray(p.image_urls))
             ? p.image_urls.map((imgUrl: string) => {
                 try {
-                    // If imgUrl is already absolute, this works. If it's relative, it's resolved against originalUrl.
+                    if (!imgUrl) return null;
                     return new URL(imgUrl, originalUrl).href;
                 } catch (e) {
                     console.warn(`Could not create absolute URL for image: ${imgUrl} with base: ${originalUrl}`);
@@ -90,18 +108,17 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
             }).filter((url: string | null): url is string => url !== null)
             : [];
 
-        // Step 2: Download images and get local public URLs
-        const downloadedImageUrls = await Promise.all(
+        // Step 2: Upload images to Firebase and get public URLs
+        const uploadedImageUrls = await Promise.all(
             absoluteImageUrls.map((imgUrl: string) => 
-                downloadAndSaveImage(imgUrl, propertyId)
+                uploadImageToFirebase(imgUrl, propertyId).catch(err => {
+                    console.error(`Failed to upload image ${imgUrl}:`, err);
+                    return 'https://placehold.co/600x400.png'; // Use placeholder on failure
+                })
             )
         );
 
-        // Use downloaded URLs, but fallback to original absolute URLs if download failed
-        const finalImageUrls = downloadedImageUrls.map((localUrl, i) => localUrl ?? absoluteImageUrls[i]);
-        if (finalImageUrls.length === 0) {
-            finalImageUrls.push('https://placehold.co/600x400.png');
-        }
+        const finalImageUrls = uploadedImageUrls.length > 0 ? uploadedImageUrls : ['https://placehold.co/600x400.png'];
 
         console.log(`Final image URLs for property:`, finalImageUrls);
 
@@ -123,7 +140,7 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
             enhanced_description: enhancedContent.enhancedDescription,
             scraped_at: new Date().toISOString(),
             image_urls: finalImageUrls,
-            image_url: finalImageUrls[0] || 'https://placehold.co/600x400.png',
+            image_url: finalImageUrls[0],
         };
     });
 
@@ -131,12 +148,16 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
     
     console.log('Content processing complete.');
     
+    // We save to our database before returning, so the data is available immediately
+    await savePropertiesToDb(finalProperties);
+    
     await saveHistoryEntry({
         ...historyEntry,
         propertyCount: finalProperties.length,
     });
 
     revalidatePath('/history');
+    revalidatePath('/database');
 
     return finalProperties;
 }
