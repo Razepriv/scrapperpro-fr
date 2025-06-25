@@ -1,13 +1,12 @@
-
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // This allows public read access to all images, and public write access
-    // to the property-images directory. For a production app, you would want
-    // to tighten these rules, for instance by only allowing writes from
-    // authenticated users (if request.auth != null;).
-    match /property-images/{allPaths=**} {
-      allow read, write: if true;
+    // Allow public read and write access to all files.
+    // For production applications, you should restrict this access.
+    // See: https://firebase.google.com/docs/storage/security/start
+    match /{allPaths=**} {
+      allow read, write;
     }
   }
 }

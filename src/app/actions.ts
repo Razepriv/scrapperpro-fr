@@ -7,10 +7,9 @@ import { extractPropertyInfo } from '@/ai/flows/extract-property-info';
 import { savePropertiesToDb, saveHistoryEntry, updatePropertyInDb, deletePropertyFromDb } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { type Property, type HistoryEntry } from '@/lib/types';
-import path from 'path';
 
 // --- Firebase Configuration ---
-// These credentials should be stored in your .env.local file
+// These credentials should be stored in your .env file
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -21,14 +20,11 @@ const firebaseConfig = {
 };
 
 // --- Firebase Image Upload Logic ---
-async function uploadImageToFirebase(imageUrl: string, propertyId: string): Promise<string> {
+async function uploadImageToFirebase(imageUrl: string, propertyId: string, index: number): Promise<string> {
     // Dynamically import Firebase and UUID libraries only when this function is called.
-    // This is crucial for avoiding build errors in Next.js.
     const { initializeApp, getApp, getApps } = await import('firebase/app');
     const { getStorage, ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-    const { v4: uuidv4 } = await import('uuid');
-
-    // Fail-fast if Firebase is not configured.
+    
     if (!firebaseConfig.apiKey || !firebaseConfig.storageBucket) {
         throw new Error("Firebase configuration is missing. Please check your .env file.");
     }
@@ -41,8 +37,7 @@ async function uploadImageToFirebase(imageUrl: string, propertyId: string): Prom
         }
     });
 
-    if (!response.ok) {
-        console.error(`[Image Download] Failed to fetch image from ${imageUrl}: ${response.statusText}`);
+    if (!response.ok || !response.body) {
         throw new Error(`Failed to fetch image from ${imageUrl}: ${response.statusText}`);
     }
 
@@ -52,7 +47,7 @@ async function uploadImageToFirebase(imageUrl: string, propertyId: string): Prom
         
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     const fileExtension = contentType.split('/')[1] || 'jpg';
-    const fileName = `property-images/${propertyId}/${uuidv4()}.${fileExtension}`;
+    const fileName = `properties/${propertyId}/${propertyId}_${index}_${Date.now()}.${fileExtension}`;
 
     // Initialize Firebase App (if not already initialized)
     const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
@@ -107,8 +102,6 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
             ? p.image_urls.map((imgUrl: string) => {
                 try {
                     if (!imgUrl) return null;
-                    // If the URL is already absolute, new URL() will handle it correctly.
-                    // If it's relative, it will be resolved against the original page URL.
                     return new URL(imgUrl, originalUrl).href;
                 } catch (e) {
                     console.warn(`Could not create absolute URL for image: ${imgUrl} with base: ${originalUrl}`);
@@ -118,22 +111,16 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
             : [];
 
         // Step 2: Upload images to Firebase and get public URLs
-        const processedImageUrls: string[] = [];
-        for (const imgUrl of absoluteImageUrls) {
-            try {
-                const uploadedUrl = await uploadImageToFirebase(imgUrl, propertyId);
-                processedImageUrls.push(uploadedUrl);
-            } catch (err) {
-                console.error(`[Image Upload] Failed to process image ${imgUrl}, using original as fallback. Error:`, err);
-                // On failure, use the original URL. The frontend component will try to render it
-                // and show its own error state if it also fails (e.g. CORS issue).
-                processedImageUrls.push(imgUrl);
-            }
-        }
+        const imageProcessingPromises = absoluteImageUrls.map((imgUrl, imgIndex) => 
+            uploadImageToFirebase(imgUrl, propertyId, imgIndex).catch(err => {
+                console.error(`[Image Processing] Failed to process image ${imgUrl}. Using original URL as fallback. Error:`, err);
+                return imgUrl; // Return original URL on failure
+            })
+        );
+        const processedImageUrls = await Promise.all(imageProcessingPromises);
 
         // Use a placeholder only if no images were found or processed.
         const finalImageUrls = processedImageUrls.length > 0 ? processedImageUrls : ['https://placehold.co/600x400.png'];
-
         console.log(`Final image URLs for property:`, finalImageUrls);
 
         // Step 3: Enhance text content
