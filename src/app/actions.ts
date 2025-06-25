@@ -109,14 +109,16 @@ async function processAndSaveHistory(properties: any[], originalUrl: string, his
             : [];
 
         // Step 2: Upload images to Firebase and get public URLs
-        const uploadedImageUrls = await Promise.all(
-            absoluteImageUrls.map((imgUrl: string) => 
-                uploadImageToFirebase(imgUrl, propertyId).catch(err => {
-                    console.error(`Failed to upload image ${imgUrl}:`, err);
-                    return 'https://placehold.co/600x400.png'; // Use placeholder on failure
-                })
-            )
-        );
+        const uploadedImageUrls: string[] = [];
+        for (const imgUrl of absoluteImageUrls) {
+            try {
+                const uploadedUrl = await uploadImageToFirebase(imgUrl, propertyId);
+                uploadedImageUrls.push(uploadedUrl);
+            } catch (err) {
+                console.error(`Failed to upload image ${imgUrl}:`, err);
+                // Log error and continue to the next image
+            }
+        }
 
         const finalImageUrls = uploadedImageUrls.length > 0 ? uploadedImageUrls : ['https://placehold.co/600x400.png'];
 
