@@ -38,20 +38,20 @@ export function EditDialog({ property, isOpen, onClose, onSave }: EditDialogProp
   };
   
   const handleFeatureChange = (index: number, value: string) => {
-    const newFeatures = [...(editedProperty.features || [])];
+    const newFeatures = [...(editedProperty.featuresAndAmenities || [])];
     newFeatures[index] = value;
-    handleChange('features', newFeatures);
+    handleChange('featuresAndAmenities', newFeatures);
   };
   
   const addFeature = () => {
-     const newFeatures = [...(editedProperty.features || []), ''];
-     handleChange('features', newFeatures);
+     const newFeatures = [...(editedProperty.featuresAndAmenities || []), ''];
+     handleChange('featuresAndAmenities', newFeatures);
   }
 
   const removeFeature = (index: number) => {
-    const newFeatures = [...(editedProperty.features || [])];
+    const newFeatures = [...(editedProperty.featuresAndAmenities || [])];
     newFeatures.splice(index, 1);
-    handleChange('features', newFeatures);
+    handleChange('featuresAndAmenities', newFeatures);
   }
 
 
@@ -96,10 +96,10 @@ export function EditDialog({ property, isOpen, onClose, onSave }: EditDialogProp
                     )
                 }
                 
-                if (key === 'features' && Array.isArray(value)) {
+                if (key === 'featuresAndAmenities' && Array.isArray(value)) {
                     return (
                         <div key={key} className="space-y-2">
-                            <Label>Features</Label>
+                            <Label>Features & Amenities</Label>
                             {value.map((feature, index) => (
                                 <div key={index} className="flex items-center gap-2">
                                 <Input

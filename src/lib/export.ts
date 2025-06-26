@@ -23,61 +23,91 @@ const getAbsoluteUrl = (url: string) => {
 };
 
 const createNestedObject = (prop: Property) => {
+  // Using new field names from Property type and providing defaults for optional fields
   return {
     main: {
         id: prop.id,
-        title: prop.title,
-        price: prop.price,
-        description: prop.description,
-        property_type: prop.property_type,
-        what_do: prop.what_do,
-        furnish_type: prop.furnish_type,
-        rental_timing: prop.rental_timing,
-        tenant_type: prop.tenant_type,
-        scraped_at: prop.scraped_at,
-        original_url: prop.original_url,
+        title: prop.title ?? 'N/A',
+        propertyPrice: prop.propertyPrice ?? 'N/A', // Changed from price
+        description: prop.description ?? 'N/A', // This is "Content"
+        categories: prop.categories ?? [], // Changed from property_type (array now)
+        whatDoYouRent: prop.whatDoYouRent ?? 'N/A', // Changed from what_do
+        propertyFurnishingStatus: prop.propertyFurnishingStatus ?? 'N/A', // Changed from furnish_type
+        // rental_timing: prop.rental_timing ?? 'N/A', // Optional, can be added if needed
+        tenantType: prop.tenantType ?? 'N/A', // Changed from tenant_type
+        scraped_at: prop.scraped_at ?? 'N/A',
+        original_url: prop.original_url ?? 'N/A',
+        page_link: prop.page_link ?? 'N/A',
     },
     location: {
-        location: prop.location,
-        city: prop.city,
-        county: prop.county,
-        neighborhood: prop.neighborhood,
+        propertyAddress: prop.propertyAddress ?? 'N/A', // Changed from location
+        city: prop.city ?? 'N/A',
+        // county: prop.county ?? 'N/A', // This field was optional and might not be in new structure consistently
+        neighborhoodArea: prop.neighborhoodArea ?? 'N/A', // Changed from neighborhood
+        propertyCountry: prop.propertyCountry ?? 'N/A',
+        propertyLongitude: prop.propertyLongitude ?? 0,
+        propertyLatitude: prop.propertyLatitude ?? 0,
     },
     property_details: {
-        bedrooms: prop.bedrooms,
-        bathrooms: prop.bathrooms,
-        area: prop.area,
-        floor_number: prop.floor_number,
-        building_information: prop.building_information,
+        propertyBed: prop.propertyBed ?? 0, // Changed from bedrooms
+        propertyBathroom: prop.propertyBathroom ?? 0, // Changed from bathrooms
+        propertyLivingRoom: prop.propertyLivingRoom ?? 0,
+        propertyRoom: prop.propertyRoom ?? 0,
+        propertySize: prop.propertySize ?? 'N/A', // Changed from area
+        // floor_number: prop.floor_number ?? 0, // Optional
+        propertyBuilding: prop.propertyBuilding ?? 'N/A', // Changed from building_information
+        propertyTax: prop.propertyTax ?? 'N/A',
+        propertyDeposit: prop.propertyDeposit ?? 'N/A',
+        propertyDiscount: prop.propertyDiscount ?? 'N/A',
     },
-    features: {
-        features: prop.features,
+    status_and_terms: {
+        propertyDisplayStatus: prop.propertyDisplayStatus ?? 'N/A',
+        propertyApprovalStatus: prop.propertyApprovalStatus ?? 'N/A',
+        propertyMinimumStay: prop.propertyMinimumStay ?? 'N/A',
+        propertyMaximumStay: prop.propertyMaximumStay ?? 'N/A',
+        propertyMinimumNotice: prop.propertyMinimumNotice ?? 'N/A',
+        termAndCondition: prop.termAndCondition ?? 'N/A', // Changed from terms_and_condition
+    },
+    preferences_flags: {
+        propertyGenderPreference: prop.propertyGenderPreference ?? 'N/A',
+        featuredProperty: prop.featuredProperty ?? false,
+        platinumProperty: prop.platinumProperty ?? false,
+        premiumProperty: prop.premiumProperty ?? false,
+    },
+    features_and_amenities: { // Changed from features
+        featuresAndAmenities: prop.featuresAndAmenities ?? [],
     },
     images: {
-        image_url: getAbsoluteUrl(prop.image_url),
-        image_urls: prop.image_urls.map(getAbsoluteUrl),
+        image_url: getAbsoluteUrl(prop.image_url ?? ''),
+        image_urls: (prop.image_urls ?? []).map(url => getAbsoluteUrl(url ?? '')),
     },
-    legal: {
-        validated_information: prop.validated_information,
-        permit_number: prop.permit_number,
-        ded_license_number: prop.ded_license_number,
-        rera_registration_number: prop.rera_registration_number,
-        dld_brn: prop.dld_brn,
-        reference_id: prop.reference_id,
-        terms_and_condition: prop.terms_and_condition,
-        mortgage: prop.mortgage,
+    legal_and_reference: { // Changed from legal
+        validated_information: prop.validated_information ?? 'N/A',
+        permit_number: prop.permit_number ?? 'N/A',
+        ded_license_number: prop.ded_license_number ?? 'N/A',
+        rera_registration_number: prop.rera_registration_number ?? 'N/A',
+        dld_brn: prop.dld_brn ?? 'N/A',
+        reference_id: prop.reference_id ?? 'N/A',
+        // mortgage: prop.mortgage ?? 'N/A', // Optional
     },
-    agent: {
-        listed_by_name: prop.listed_by_name,
-        listed_by_phone: prop.listed_by_phone,
-        listed_by_email: prop.listed_by_email,
+    agent_and_owner: { // Changed from agent
+        propertyAgent: prop.propertyAgent ?? 'N/A',
+        propertyOwnerDetails: prop.propertyOwnerDetails ?? 'N/A',
+        listed_by_name: prop.listed_by_name ?? 'N/A', // Can be redundant if covered by Agent/Owner
+        listed_by_phone: prop.listed_by_phone ?? 'N/A',
+        listed_by_email: prop.listed_by_email ?? 'N/A',
     },
-    ai_enhancements: {
-        enhanced_title: prop.enhanced_title,
-        enhanced_description: prop.enhanced_description,
-        original_title: prop.original_title,
-        original_description: prop.original_description,
+    ai_enhancements_originals: { // Changed from ai_enhancements
+        // enhanced_title: prop.enhanced_title ?? 'N/A', // Now part of main.title
+        // enhanced_description: prop.enhanced_description ?? 'N/A', // Now part of main.description
+        original_title: prop.original_title ?? 'N/A',
+        original_description: prop.original_description ?? 'N/A', // This is original "Content"
     },
+    additional: { // For fields not fitting elsewhere or less critical optional ones
+        matterportLink: prop.matterportLink ?? 'N/A',
+        // Add other optional fields from old or new schema here if needed for export
+        // e.g. prop.mortgage, prop.county, prop.rental_timing, prop.floor_number
+    }
   };
 };
 

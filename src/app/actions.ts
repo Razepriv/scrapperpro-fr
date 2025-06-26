@@ -157,25 +157,53 @@ async function processScrapedData(properties: any[], originalUrl: string, histor
 
         const finalImageUrls = processedImageUrls.length > 0 ? processedImageUrls : ['https://placehold.co/600x400.png'];
         
-        const enhancedContent = await enhancePropertyContent({ title: p.title, description: p.description });
+        const enhancedContent = await enhancePropertyContent({ title: p.title || '', description: p.description || '' });
         
-        return {
-            ...p,
+        const processedProperty: Property = {
+            ...p, // Spreading AI extracted data first
             id: propertyId,
             original_url: originalUrl,
-            original_title: p.title,
-            original_description: p.description,
+            // Ensure original_title and original_description are from p, if they exist
+            original_title: p.original_title || p.title || '',
+            original_description: p.original_description || p.description || '',
+
+            // Enhanced content
             title: enhancedContent.enhancedTitle,
             description: enhancedContent.enhancedDescription,
-            enhanced_title: enhancedContent.enhancedTitle,
-            enhanced_description: enhancedContent.enhancedDescription,
+            // enhanced_title and enhanced_description are effectively the same as title and description post-enhancement
+            // So we can remove them if 'title' and 'description' are always the enhanced versions.
+            // For clarity with the Property type, let's ensure they are explicitly set if distinct.
+            // However, the current Property type has title & description as the primary, and original_ as pre-enhancement.
+            // So, enhanced_title and enhanced_description from the old type might be redundant if title/desc are always post-enhancement.
+            // Let's stick to:
+            // title: enhancedContent.enhancedTitle, (This is Property.title)
+            // description: enhancedContent.enhancedDescription, (This is Property.description)
+
             scraped_at: new Date().toISOString(),
             image_urls: finalImageUrls,
             image_url: finalImageUrls[0],
+
+            // Apply default values as per requirements
+            // Make sure these fields exist in the Property type
+            propertyCountry: p.propertyCountry || "UAE",
+            propertyAgent: p.propertyAgent || "ahmed",
+
+            // Ensure all required fields from Property type have some default if not provided by 'p'
+            // This depends on how strictly we want to enforce the Property type here.
+            // For now, assuming 'p' (AI output) + defaults + overrides is the goal.
+            // Optional fields from Property type will remain undefined if not in 'p' and not defaulted.
         };
+
+        // Clean up any fields that were in 'p' (AI output) but are not in our final Property type
+        // This is harder to do dynamically without a list of valid keys.
+        // For now, we rely on the spread ...p and then specific overrides.
+        // If p contains fields not in Property, they will persist if not cleaned.
+        // This is generally fine for JSON, but for typed objects, it's good to be aware.
+
+        return processedProperty;
     });
 
-    const finalProperties = await Promise.all(processingPromises);
+    const finalProperties: Property[] = await Promise.all(processingPromises);
     
     console.log('Content processing complete.');
     

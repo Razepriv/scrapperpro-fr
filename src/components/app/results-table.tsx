@@ -77,25 +77,25 @@ export function ResultsTable({ properties, onSave }: ResultsTableProps) {
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                     <PropertyImage
                       src={prop.image_url || 'https://placehold.co/600x400.png'}
-                      alt={prop.title}
+                      alt={prop.title ?? 'Property image'}
                       className="hidden sm:block w-[120px] h-[80px]"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold truncate text-base" title={prop.title}>{prop.title}</p>
+                      <p className="font-bold truncate text-base" title={prop.title ?? undefined}>{prop.title ?? 'Untitled Property'}</p>
                       <p className="text-sm text-muted-foreground flex items-center gap-1 truncate">
                         <MapPin className="h-3 w-3" />
-                        {prop.location}
+                        {prop.propertyAddress ?? 'N/A'}
                       </p>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1">
-                        <Badge variant="secondary" className="text-nowrap">{prop.property_type}</Badge>
-                        <span className="flex items-center gap-1.5"><BedDouble className="h-4 w-4 text-primary/70" /> {prop.bedrooms} beds</span>
-                        <span className="flex items-center gap-1.5"><Bath className="h-4 w-4 text-primary/70" /> {prop.bathrooms} baths</span>
-                        <span className="flex items-center gap-1.5"><Square className="h-4 w-4 text-primary/70" /> {prop.area}</span>
+                        <Badge variant="secondary" className="text-nowrap">{prop.categories?.join(', ') || (prop as any).property_type || 'N/A'}</Badge>
+                        <span className="flex items-center gap-1.5"><BedDouble className="h-4 w-4 text-primary/70" /> {prop.propertyBed ?? 0} beds</span>
+                        <span className="flex items-center gap-1.5"><Bath className="h-4 w-4 text-primary/70" /> {prop.propertyBathroom ?? 0} baths</span>
+                        <span className="flex items-center gap-1.5"><Square className="h-4 w-4 text-primary/70" /> {prop.propertySize ?? 'N/A'}</span>
                       </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-4 pl-4">
-                    <p className="font-semibold text-lg text-primary text-right">{prop.price}</p>
+                    <p className="font-semibold text-lg text-primary text-right">{prop.propertyPrice ?? 'N/A'}</p>
                     <ChevronDown className="h-5 w-5 shrink-0 transition-transform duration-200 text-muted-foreground" />
                 </div>
              </div>
@@ -107,7 +107,7 @@ export function ResultsTable({ properties, onSave }: ResultsTableProps) {
                  <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => setEnhanceContent({ original: prop.original_description, enhanced: prop.description })}
+                    onClick={() => setEnhanceContent({ original: prop.original_description ?? '', enhanced: prop.description ?? '' })}
                   >
                    <Sparkles className="mr-2" /> View AI Enhancement
                  </Button>
@@ -124,7 +124,7 @@ export function ResultsTable({ properties, onSave }: ResultsTableProps) {
                     <PropertyImageGallery
                       propertyId={prop.id}
                       imageUrls={prop.image_urls}
-                      title={prop.title}
+                      title={prop.title ?? 'Image Gallery'}
                     />
                   </div>
                   <Separator />
@@ -136,20 +136,22 @@ export function ResultsTable({ properties, onSave }: ResultsTableProps) {
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 text-sm">
                   <div className="space-y-3">
                     <DetailItem icon={Building} label="City" value={prop.city} />
-                    <DetailItem icon={Globe} label="County" value={prop.county} />
-                    <DetailItem icon={MapPin} label="Neighborhood" value={prop.neighborhood} />
-                    <DetailItem icon={Hash} label="Floor" value={prop.floor_number} />
+                    <DetailItem icon={MapPin} label="Neighborhood/Area" value={prop.neighborhoodArea} />
+                    <DetailItem icon={Globe} label="Country" value={prop.propertyCountry} />
+                    {/* Intentionally keeping fewer items here for now, more can be added later */}
+                    {/* <DetailItem icon={Hash} label="Floor" value={prop.floor_number} /> */}
                   </div>
                   <div className="space-y-3">
-                    <DetailItem icon={CheckCircle} label="For" value={prop.what_do} />
-                    <DetailItem icon={Users} label="Tenant Type" value={prop.tenant_type} />
-                    <DetailItem icon={Sofa} label="Furnishing" value={prop.furnish_type} />
-                    <DetailItem icon={Clock} label="Rental Timing" value={prop.rental_timing} />
+                    <DetailItem icon={CheckCircle} label="Listing Type" value={prop.whatDoYouRent} />
+                    <DetailItem icon={Users} label="Tenant Type" value={prop.tenantType} />
+                    <DetailItem icon={Sofa} label="Furnishing" value={prop.propertyFurnishingStatus} />
+                    <DetailItem icon={FileText} label="Categories" value={prop.categories?.join(', ')} />
                   </div>
                   <div className="space-y-3">
-                    <DetailItem icon={Building2} label="Building Info" value={prop.building_information} />
-                    <DetailItem icon={FileText} label="Mortgage" value={prop.mortgage} />
-                    <DetailItem icon={FileText} label="Terms" value={prop.terms_and_condition} />
+                    <DetailItem icon={Building2} label="Building Info" value={prop.propertyBuilding} />
+                    {/* <DetailItem icon={FileText} label="Mortgage" value={prop.mortgage} /> */}
+                    <DetailItem icon={FileText} label="Terms" value={prop.termAndCondition} />
+                    <DetailItem icon={FileText} label="Display Status" value={prop.propertyDisplayStatus} />
                   </div>
                 </div>
               </div>
@@ -162,12 +164,13 @@ export function ResultsTable({ properties, onSave }: ResultsTableProps) {
                     <div className="space-y-3">
                         <DetailItem icon={Award} label="Reference ID" value={prop.reference_id} />
                         <DetailItem icon={FileKey} label="Permit Number" value={prop.permit_number} />
-                        <DetailItem icon={FileKey} label="DED License" value={prop.ded_license_number} />
+                        <DetailItem icon={User} label="Agent" value={prop.propertyAgent} />
                     </div>
                     <div className="space-y-3">
                         <DetailItem icon={FileKey} label="RERA Registration" value={prop.rera_registration_number} />
                         <DetailItem icon={FileKey} label="DLD BRN" value={prop.dld_brn} />
                         <DetailItem icon={ShieldCheck} label="Validated Info" value={prop.validated_information} />
+
                     </div>
                      {prop.page_link && 
                         <div className="flex items-start">
@@ -198,25 +201,40 @@ export function ResultsTable({ properties, onSave }: ResultsTableProps) {
                 </div>
               </div>
               
-              {prop.features && prop.features.length > 0 && (
+              {prop.featuresAndAmenities && prop.featuresAndAmenities.length > 0 && (
                 <>
                 <Separator />
                 <div className="space-y-2">
                   <h4 className="font-semibold flex items-center gap-2 text-base"><List className="h-4 w-4"/> Features & Amenities</h4>
                   <div className="flex flex-wrap gap-2">
-                    {prop.features.map((feature, index) => <Badge key={index} variant="outline">{feature}</Badge>)}
+                    {prop.featuresAndAmenities.map((feature, index) => <Badge key={index} variant="outline">{feature}</Badge>)}
                   </div>
                 </div>
                 </>
               )}
 
-              {prop.description && (
+              {prop.description && ( // This is the main 'Content' field
                 <>
                 <Separator />
                 <div className="space-y-2">
-                   <h4 className="font-semibold flex items-center gap-2 text-base">Description</h4>
+                   <h4 className="font-semibold flex items-center gap-2 text-base">Content / Description</h4>
                    <div className="prose prose-sm max-w-none text-muted-foreground" dangerouslySetInnerHTML={{ __html: prop.description }} />
                 </div>
+                </>
+              )}
+
+              {/* Adding a section for some of the new boolean flags if present */}
+              {(prop.featuredProperty || prop.platinumProperty || prop.premiumProperty) && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <h4 className="font-semibold flex items-center gap-2 text-base">Property Status Flags</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {prop.featuredProperty && <Badge variant="outline">Featured</Badge>}
+                      {prop.platinumProperty && <Badge variant="outline">Platinum</Badge>}
+                      {prop.premiumProperty && <Badge variant="outline">Premium</Badge>}
+                    </div>
+                  </div>
                 </>
               )}
 
@@ -236,3 +254,6 @@ export function ResultsTable({ properties, onSave }: ResultsTableProps) {
     </>
   );
 }
+
+// A new Badge variant "special" might need to be defined in ui/badge.tsx or tailwind config
+// For now, it will fall back to default styling if "special" is not defined.

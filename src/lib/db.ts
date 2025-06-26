@@ -63,12 +63,15 @@ export async function savePropertiesToDb(newProperties: Property[]): Promise<voi
                 return true;
             }
 
-            // Fallback for HTML pastes or cases without unique IDs: original title and location.
+            // Fallback for HTML pastes or cases without unique IDs: original title and propertyAddress.
             // This is less reliable but better than nothing.
-            if (p.original_title && newProp.original_title && p.location && newProp.location &&
+            const pAddressField = (p as any).location || p.propertyAddress; // Get address from p, whether old (location) or new (propertyAddress)
+            if (p.original_title && newProp.original_title &&
+                pAddressField && newProp.propertyAddress && // Ensure both addresses exist
                 p.original_title.toLowerCase() === newProp.original_title.toLowerCase() &&
-                p.location.toLowerCase() === newProp.location.toLowerCase()) {
-                console.log(`[DB Duplicate Check] Match on original_title & location: "${p.original_title}" / "${p.location}". Existing ID: ${p.id}, New Title: ${newProp.title}`);
+                (pAddressField as string).toLowerCase() === newProp.propertyAddress.toLowerCase()
+            ) {
+                console.log(`[DB Duplicate Check] Match on original_title & address: "${p.original_title}" / "${pAddressField}". Existing ID: ${p.id}, New Title: ${newProp.title}`);
                 return true;
             }
 
