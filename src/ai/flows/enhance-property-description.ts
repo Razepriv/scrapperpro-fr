@@ -58,14 +58,23 @@ const enhancePropertyContentFlow = ai.defineFlow(
     outputSchema: EnhancePropertyContentOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    // If enhancement fails, return the original content wrapped in the output schema
-    if (!output) {
+    try {
+      const {output} = await prompt(input);
+      if (!output) {
+        console.warn(`[AI Enhancement] Failed to get enhancement output for title: "${input.title.substring(0, 50)}...". Falling back to original content.`);
+        return {
+          enhancedTitle: input.title,
+          enhancedDescription: input.description,
+        };
+      }
+      return output;
+    } catch (error) {
+      console.error(`[AI Enhancement] Error during content enhancement for title: "${input.title.substring(0,50)}...":`, error);
+      // Fallback to original content on error as well
       return {
         enhancedTitle: input.title,
         enhancedDescription: input.description,
       };
     }
-    return output;
   }
 );

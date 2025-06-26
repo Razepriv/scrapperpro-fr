@@ -46,23 +46,29 @@ export async function savePropertiesToDb(newProperties: Property[]): Promise<voi
         // Determine if the new property is a duplicate of an existing one by checking multiple fields.
         const existingPropIndex = updatedDb.findIndex(p => {
             // Strongest check: a non-generic original_url. This is the most reliable.
-            if (p.original_url && p.original_url !== 'scraped-from-html' && p.original_url === newProp.original_url) {
+            if (p.original_url && p.original_url !== 'scraped-from-html' && newProp.original_url && p.original_url === newProp.original_url) {
+                console.log(`[DB Duplicate Check] Match on original_url: ${p.original_url}. Existing ID: ${p.id}, New Title: ${newProp.title}`);
                 return true;
             }
             
             // Next best check: a unique reference ID if available.
             if (p.reference_id && newProp.reference_id && p.reference_id !== "" && p.reference_id === newProp.reference_id) {
+                console.log(`[DB Duplicate Check] Match on reference_id: ${p.reference_id}. Existing ID: ${p.id}, New Title: ${newProp.title}`);
                 return true;
             }
 
             // Another good check: the direct page link if extracted.
             if (p.page_link && newProp.page_link && p.page_link !== "" && p.page_link === newProp.page_link) {
+                console.log(`[DB Duplicate Check] Match on page_link: ${p.page_link}. Existing ID: ${p.id}, New Title: ${newProp.title}`);
                 return true;
             }
 
             // Fallback for HTML pastes or cases without unique IDs: original title and location.
             // This is less reliable but better than nothing.
-            if (p.original_title && newProp.original_title && p.original_title === newProp.original_title && p.location === newProp.location) {
+            if (p.original_title && newProp.original_title && p.location && newProp.location &&
+                p.original_title.toLowerCase() === newProp.original_title.toLowerCase() &&
+                p.location.toLowerCase() === newProp.location.toLowerCase()) {
+                console.log(`[DB Duplicate Check] Match on original_title & location: "${p.original_title}" / "${p.location}". Existing ID: ${p.id}, New Title: ${newProp.title}`);
                 return true;
             }
 
@@ -73,9 +79,11 @@ export async function savePropertiesToDb(newProperties: Property[]): Promise<voi
             // It's a duplicate, so we update the existing entry.
             // We keep the existing property's ID to maintain data integrity and avoid key issues in React.
             const originalId = updatedDb[existingPropIndex].id;
+            console.log(`[DB Save] Updating existing property ID: ${originalId} with new data from property titled: "${newProp.title}" due to duplicate detection.`);
             updatedDb[existingPropIndex] = { ...newProp, id: originalId };
         } else {
             // It's a new property, add it to the start of the list.
+            console.log(`[DB Save] Adding new property titled: "${newProp.title}" with ID: ${newProp.id}.`);
             updatedDb.unshift(newProp);
         }
     });

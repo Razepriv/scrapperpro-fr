@@ -1,6 +1,8 @@
-import type { IronSessionData } from 'iron-session';
+// import type { IronSession } from 'iron-session'; // No longer needed here directly for extends
 
-export interface SessionData extends IronSessionData {
+// SessionData defines the properties you want to store in the session.
+// The IronSession type will be applied by getIronSession, adding methods like save(), destroy() etc.
+export interface SessionData {
   username?: string;
   isLoggedIn: boolean;
 }

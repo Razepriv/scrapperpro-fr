@@ -9,6 +9,18 @@ import { savePropertiesToDb, saveHistoryEntry, updatePropertyInDb, deletePropert
 import { revalidatePath } from 'next/cache';
 import { type Property, type HistoryEntry } from '@/lib/types';
 
+export type { Property, HistoryEntry }; // Re-export types
+
+interface BulkScrapeError {
+    url: string;
+    error: string;
+}
+
+export interface ScrapeBulkResult {
+    properties: Property[];
+    errors: BulkScrapeError[];
+}
+
 async function getHtml(url: string): Promise<string> {
     try {
         const response = await fetch(url, {
@@ -20,15 +32,22 @@ async function getHtml(url: string): Promise<string> {
             }
         });
         if (!response.ok) {
-            throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
+            const errorText = await response.text().catch(() => 'Could not retrieve error body.');
+            console.error(`Error fetching URL ${url}: HTTP ${response.status} ${response.statusText}. Body: ${errorText.substring(0, 500)}`);
+            throw new Error(`Failed to fetch URL ${url}: HTTP ${response.status} ${response.statusText}.`);
         }
         return await response.text();
-    } catch (error) {
+    } catch (error: any) {
         console.error(`Error fetching URL ${url}:`, error);
-        if (error instanceof Error) {
+        if (error instanceof Error && error.message.startsWith('Failed to fetch URL')) {
+            // This is an error we've already processed and logged from the !response.ok block
+            throw error;
+        } else if (error instanceof Error) {
+            // This could be a network error (e.g., DNS resolution failure) or other fetch-related error
             throw new Error(`Could not retrieve content from ${url}. Reason: ${error.message}`);
         }
-        throw new Error(`Could not retrieve content from ${url}.`);
+        // Fallback for non-Error objects (though rare in modern JS)
+        throw new Error(`Could not retrieve content from ${url}. Reason: ${String(error)}`);
     }
 }
 
@@ -40,47 +59,81 @@ async function processScrapedData(properties: any[], originalUrl: string, histor
         
         const absoluteImageUrls = (p.image_urls && Array.isArray(p.image_urls))
             ? p.image_urls.map((imgUrl: string) => {
+                if (!imgUrl || typeof imgUrl !== 'string') return null;
                 try {
-                    if (!imgUrl) return null;
-                    const baseUrl = originalUrl.startsWith('http') ? originalUrl : (p.page_link || 'https://example.com');
-                    return new URL(imgUrl, baseUrl).href;
-                } catch (e) {
-                    console.warn(`Could not create absolute URL for image: ${imgUrl}`);
-                    return null;
+                    // If imgUrl is already absolute
+                    if (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) {
+                        return new URL(imgUrl).href;
+                    }
+
+                    // Determine a valid base URL
+                    let baseUrlToUse: string | undefined;
+                    if (p.page_link && (p.page_link.startsWith('http://') || p.page_link.startsWith('https://'))) {
+                        baseUrlToUse = p.page_link;
+                    } else if (originalUrl && (originalUrl.startsWith('http://') || originalUrl.startsWith('https://'))) {
+                        baseUrlToUse = originalUrl;
+                    }
+
+                    if (baseUrlToUse) {
+                        return new URL(imgUrl, baseUrlToUse).href;
+                    } else {
+                        console.warn(`[Image Processing] Could not determine an absolute base URL for relative image: ${imgUrl}. Original URL: ${originalUrl}, Page Link: ${p.page_link}`);
+                        return null; // Cannot make it absolute
+                    }
+                } catch (e: any) {
+                    console.warn(`[Image Processing] Could not create absolute URL for image: ${imgUrl}. Error: ${e.message}`);
+                    return null; // Return null if URL construction fails
                 }
             }).filter((url: string | null): url is string => url !== null)
             : [];
 
-        console.log(`[Image Processing] Starting for propertyId: ${propertyId}. Found ${absoluteImageUrls.length} candidate images.`);
+        console.log(`[Image Processing] Starting for propertyId: ${propertyId}. Found ${absoluteImageUrls.length} candidate images from AI:`, p.image_urls);
         
-        const imageProcessingPromises = absoluteImageUrls.map(async (imgUrl, imgIndex) => {
+        const imageProcessingPromises = absoluteImageUrls.map(async (imgUrl: string, imgIndex: number) => {
             try {
-                console.log(`[Image Processing] [${imgIndex+1}/${absoluteImageUrls.length}] Attempting to fetch: ${imgUrl}`);
-                const referer = originalUrl.startsWith('http') ? originalUrl : (p.page_link || 'https://example.com');
+                console.log(`[Image Processing] [${imgIndex+1}/${absoluteImageUrls.length}] Attempting to fetch: ${imgUrl} for propertyId: ${propertyId}`);
+                const referer = originalUrl.startsWith('http') ? originalUrl : (p.page_link || ''); // Provide empty string if no valid referer
                 const response = await fetch(imgUrl, {
                     headers: {
-                        'User-Agent': 'Mozilla/5.0 (compatible; PropScrapeAI/1.0)',
+                        'User-Agent': 'Mozilla/5.0 (compatible; PropScrapeAI/1.0; +http://example.com/bot)', // Added bot info
                         'Referer': referer,
+                        'Accept': 'image/*,*/*;q=0.8', // Accept images primarily
                     },
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Fetch failed with status ${response.status}`);
+                    throw new Error(`Fetch failed for ${imgUrl} with status ${response.status} ${response.statusText}`);
                 }
                 
                 const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.startsWith('image/')) {
-                    throw new Error(`Invalid content-type: ${contentType}. Expected an image.`);
+                let fileExtension = 'jpg'; // Default extension
+
+                if (contentType && contentType.startsWith('image/')) {
+                    fileExtension = contentType.split('/')[1]?.split('+')[0]?.toLowerCase() || 'jpg';
+                    if (fileExtension === 'jpeg') fileExtension = 'jpg';
+                     // Basic sanitization for file extension
+                    if (!/^[a-z0-9]+$/.test(fileExtension)) {
+                        console.warn(`[Image Processing] Invalid characters in derived file extension '${fileExtension}' from contentType '${contentType}'. Defaulting to 'jpg'.`);
+                        fileExtension = 'jpg';
+                    }
+                } else {
+                    console.warn(`[Image Processing] Invalid or missing content-type for ${imgUrl}: ${contentType}. Will attempt to process buffer.`)
+                    // Attempt to guess extension from URL if content type is missing/invalid
+                    const urlPath = new URL(imgUrl).pathname;
+                    const extFromUrl = urlPath.substring(urlPath.lastIndexOf('.') + 1);
+                    if (extFromUrl && /^[a-z0-9]+$/.test(extFromUrl) && extFromUrl.length < 5) {
+                        fileExtension = extFromUrl;
+                        console.log(`[Image Processing] Guessed extension '${fileExtension}' from URL ${imgUrl}`);
+                    }
                 }
 
                 const imageBuffer = await response.arrayBuffer();
                  if (imageBuffer.byteLength === 0) {
-                    throw new Error('Downloaded image buffer is empty.');
+                    throw new Error(`Downloaded image buffer is empty for ${imgUrl}.`);
                 }
                 const imageSizeKB = Math.round(imageBuffer.byteLength / 1024);
-                console.log(`[Image Download] [${imgIndex+1}] Success. Size: ${imageSizeKB}KB. Content-Type: ${contentType}`);
+                console.log(`[Image Download] [${imgIndex+1}/${absoluteImageUrls.length}] Success for ${imgUrl}. Size: ${imageSizeKB}KB. Content-Type: ${contentType}`);
                     
-                const fileExtension = contentType.split('/')[1]?.split('+')[0] || 'jpg';
                 const propertyImageDir = path.join(process.cwd(), 'public', 'uploads', 'properties', propertyId);
                 await fs.mkdir(propertyImageDir, { recursive: true });
 
@@ -140,8 +193,14 @@ async function processScrapedData(properties: any[], originalUrl: string, histor
 export async function scrapeUrl(url: string): Promise<Property[] | null> {
     console.log(`Scraping URL: ${url}`);
 
-    if (!url || !url.includes('http')) {
-        throw new Error('Invalid URL provided.');
+    try {
+        const parsedUrl = new URL(url);
+        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            throw new Error('Invalid URL protocol. Only HTTP and HTTPS are supported.');
+        }
+    } catch (e: any) {
+        console.error(`[Validation Error] Invalid URL format for "${url}": ${e.message}`);
+        throw new Error(`Invalid URL provided: "${url}". Please ensure it is a valid HTTP or HTTPS URL. Reason: ${e.message}`);
     }
     
     const htmlContent = await getHtml(url);
@@ -170,7 +229,7 @@ export async function scrapeHtml(html: string, originalUrl: string = 'scraped-fr
     return processScrapedData(result.properties, originalUrl, { type: 'HTML', details: 'Pasted HTML content' });
 }
 
-export async function scrapeBulk(urls: string): Promise<Property[] | null> {
+export async function scrapeBulk(urls: string): Promise<ScrapeBulkResult> {
     const urlList = urls.split('\n').map(u => u.trim()).filter(Boolean);
     console.log(`Bulk scraping ${urlList.length} URLs.`);
 
@@ -179,23 +238,42 @@ export async function scrapeBulk(urls: string): Promise<Property[] | null> {
     }
     
     const allResults: Property[] = [];
+    const errors: { url: string, error: string }[] = [];
+
     for (const url of urlList) {
         try {
-            console.log(`Scraping ${url} in bulk...`);
+            console.log(`[Bulk Scrape] Processing URL: ${url}`);
             const htmlContent = await getHtml(url);
             const result = await extractPropertyInfo({ htmlContent });
-            if (result && result.properties) {
+            if (result && result.properties && result.properties.length > 0) {
                 const processed = await processScrapedData(result.properties, url, {type: 'BULK', details: `Bulk operation included: ${url}`});
                 allResults.push(...processed);
+                console.log(`[Bulk Scrape] Successfully processed ${url}. Found ${processed.length} properties.`);
+            } else {
+                console.log(`[Bulk Scrape] No properties found or extracted for ${url}.`);
+                // Optional: Add to errors if no properties found is considered a failure for a given URL
+                // errors.push({ url, error: "No properties extracted." });
             }
-        } catch (error) {
-            console.error(`Failed to scrape ${url} during bulk operation:`, error);
+        } catch (error: any) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error(`[Bulk Scrape] Failed to scrape ${url}:`, errorMessage);
+            errors.push({ url, error: errorMessage });
         }
     }
     
-    return allResults;
+    console.log(`[Bulk Scrape] Completed. ${allResults.length} properties scraped from ${urlList.length - errors.length} URLs. ${errors.length} URLs failed.`);
+    if (errors.length > 0) {
+        console.warn("[Bulk Scrape] Failed URLs and errors:");
+        errors.forEach(err => console.warn(`  - ${err.url}: ${err.error}`));
+    }
+
+    // Note: The return type of the function will change.
+    // Callers will need to be updated to handle { properties: Property[], errors: BulkScrapeError[] }
+    return { properties: allResults, errors };
 }
 
+// Update the function signature if necessary in other files if type checking is strict.
+// For now, assuming loose coupling or subsequent updates to callers.
 
 export async function saveProperty(property: Property) {
     await savePropertiesToDb([property]);

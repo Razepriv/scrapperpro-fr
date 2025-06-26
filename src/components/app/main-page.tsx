@@ -90,7 +90,22 @@ export function MainPage() {
       toast({ variant: "destructive", title: "Input Error", description: "URL list cannot be empty." });
       return;
     }
-    handleScrape(() => scrapeBulk(bulkUrls));
+    // Adjusting the call to handleScrape for scrapeBulk's new return type
+    handleScrape(async () => {
+      const result = await scrapeBulk(bulkUrls);
+      if (result.errors && result.errors.length > 0) {
+        toast({
+          variant: "default", // Using default, but could be "warning" if defined
+          title: "Bulk Scrape Notice",
+          description: `${result.errors.length} URL(s) encountered issues. ${result.properties.length} properties found. Check console for details on errors.`,
+          duration: 7000,
+        });
+        console.warn("Bulk scrape failures:", result.errors);
+      }
+      // handleScrape expects Property[] | null. We pass the properties array.
+      // If result.properties is empty and there were errors, it's still a valid scenario.
+      return result.properties;
+    });
     setBulkUrls('');
   };
 
